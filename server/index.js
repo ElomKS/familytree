@@ -1,6 +1,5 @@
 const express = require("express");
 const path = require("path");
-const cors = require("cors");
 require("dotenv").config();
 const pool = require("./db");
 const usersRouter = require("./routes/users");
@@ -16,12 +15,21 @@ const ALLOWED_ORIGINS = [
   "https://registrekfe.onrender.com",
 ].filter(Boolean);
 
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error("Not allowed by CORS"));
-  },
-}));
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  const host = req.headers.host;
+  const allowed =
+    ALLOWED_ORIGINS.includes(origin) ||
+    (host && (origin === `http://${host}` || origin === `https://${host}`));
+  if (!allowed) return next(new Error("Not allowed by CORS"));
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: "2mb" }));
 
 const CREATE_TABLE = `
