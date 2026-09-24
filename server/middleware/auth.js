@@ -1,14 +1,13 @@
 const jwt = require("jsonwebtoken");
-
-const JWT_SECRET = process.env.JWT_SECRET || "registre-secret-change-in-production";
+const { JWT_SECRET } = require("../config");
 
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
+  const token = header && header.startsWith("Bearer ") ? header.split(" ")[1] : req.cookies.token;
+  if (!token) {
     return res.status(401).json({ error: "Authentification requise." });
   }
   try {
-    const token = header.split(" ")[1];
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {

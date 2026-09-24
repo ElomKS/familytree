@@ -5,23 +5,18 @@ const API_BASE =
 const USERS_URL = `${API_BASE}/users`;
 const AUTH_URL = `${API_BASE}/auth`;
 
-let authToken = localStorage.getItem("token") || null;
+localStorage.removeItem("token");
 let authUser = JSON.parse(localStorage.getItem("user") || "null");
 
-export function getAuthToken() { return authToken; }
 export function getAuthUser() { return authUser; }
 
-export function setAuth(token, user) {
-  authToken = token;
+export function setAuth(user) {
   authUser = user;
-  localStorage.setItem("token", token);
   localStorage.setItem("user", JSON.stringify(user));
 }
 
 export function clearAuth() {
-  authToken = null;
   authUser = null;
-  localStorage.removeItem("token");
   localStorage.removeItem("user");
 }
 
@@ -29,18 +24,26 @@ export async function login(username, password) {
   const res = await fetch(`${AUTH_URL}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ username, password }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Échec de la connexion.");
-  setAuth(data.token, { username: data.username, role: data.role });
+  setAuth({ username: data.username, role: data.role });
   return data;
+}
+
+export async function logout() {
+  try {
+    await fetch(`${AUTH_URL}/logout`, { method: "POST", credentials: "include" });
+  } finally {
+    clearAuth();
+  }
 }
 
 async function apiCall(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(`${USERS_URL}${path}`, { headers, ...options });
+  const res = await fetch(`${USERS_URL}${path}`, { headers, ...options, credentials: "include" });
   if (res.status === 401) { clearAuth(); window.location.reload(); throw new Error("Session expirée."); }
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.status === 204 ? null : res.json();
@@ -48,8 +51,7 @@ async function apiCall(path, options = {}) {
 
 async function authApiCall(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(`${AUTH_URL}${path}`, { headers, ...options });
+  const res = await fetch(`${AUTH_URL}${path}`, { headers, ...options, credentials: "include" });
   if (res.status === 401) { clearAuth(); window.location.reload(); throw new Error("Session expirée."); }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

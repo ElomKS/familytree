@@ -1,4 +1,4 @@
-import { getAuthToken } from "./userService";
+import { clearAuth } from "./userService";
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
@@ -6,10 +6,9 @@ const API_BASE =
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
-  const token = getAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { headers, ...options });
+  const res = await fetch(`${API_BASE}${path}`, { headers, ...options, credentials: "include" });
   if (res.status === 401) {
+    clearAuth();
     window.location.reload();
     throw new Error("Session expirée.");
   }

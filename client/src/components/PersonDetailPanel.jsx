@@ -1,5 +1,5 @@
-import { X, Calendar, Flag, MessageSquare, Link2, Users } from "lucide-react";
-import { fullName, formatDates, genderLabel } from "../utils/person";
+import { X, Flag, MessageSquare, Link2, Users } from "lucide-react";
+import { fullName, genderLabel } from "../utils/person";
 import Avatar from "./Avatar";
 
 function PersonName({ person }) {
@@ -28,7 +28,6 @@ export default function PersonDetailPanel({
   if (!person) return null;
 
   const name = fullName(person);
-  const dates = formatDates(person.birthDate, person.deathDate, person.deceased);
   const byId = new Map(people.map((p) => [p.id, p]));
 
   const parentRels = relationships.filter(
@@ -57,12 +56,6 @@ export default function PersonDetailPanel({
       </div>
 
       <div className="px-5 py-4 space-y-3">
-        <div className="flex items-center gap-3 text-sm">
-          <Calendar size={14} className="text-accent shrink-0" />
-          <span className="text-ink-muted">Dates :</span>
-          <span className="text-ink-light">{dates || "Inconnues"}</span>
-        </div>
-
         {genderLabel(person.gender) && (
           <div className="flex items-center gap-3 text-sm">
             <Flag size={14} className="text-accent shrink-0" />

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { List, Users, Download, Upload } from "lucide-react";
-import { getAuthUser, clearAuth } from "../api/userService";
+import { getAuthUser, logout } from "../api/userService";
 import {
   fetchPeople,
   fetchRelationships,
@@ -268,8 +268,7 @@ export default function FamilyApp() {
   }
 
   function handleLogout() {
-    clearAuth();
-    window.location.reload();
+    logout().finally(() => window.location.reload());
   }
 
   function selectPerson(id) {

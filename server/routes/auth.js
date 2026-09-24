@@ -1,13 +1,22 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("../db");
 const { authenticate, requireAdmin } = require("../middleware/auth");
+const { JWT_SECRET } = require("../config");
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "registre-secret-change-in-production";
 
-router.post("/login", async (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives de connexion. Réessayez dans 15 minutes." },
+});
+
+router.post("/login", loginLimiter, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Nom d'utilisateur et mot de passe requis." });
@@ -23,11 +32,26 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Identifiants incorrects." });
     }
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, username: user.username, role: user.role });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.json({ username: user.username, role: user.role });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur." });
   }
+});
+
+router.post("/logout", (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+    sameSite: "lax",
+  });
+  res.json({ message: "Déconnecté." });
 });
 
 router.get("/users", authenticate, requireAdmin, async (req, res) => {

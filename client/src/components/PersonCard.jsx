@@ -1,10 +1,9 @@
-import { Pencil, Trash2, Calendar } from "lucide-react";
-import { fullName, formatDates } from "../utils/person";
+import { Pencil, Trash2 } from "lucide-react";
+import { fullName } from "../utils/person";
 import Avatar from "./Avatar";
 
 export default function PersonCard({ person, onSelect, onEdit, onDelete }) {
   const name = fullName(person);
-  const dates = formatDates(person.birthDate, person.deathDate, person.deceased);
 
   return (
     <li
@@ -15,10 +14,6 @@ export default function PersonCard({ person, onSelect, onEdit, onDelete }) {
         <Avatar person={person} size="w-10 h-10" textSize="text-sm" />
         <div className="min-w-0">
           <h3 className="font-display text-lg text-ink-light truncate">{name}</h3>
-          <span className="flex items-center gap-1.5 text-sm text-ink-muted">
-            <Calendar size={12} />
-            {dates || "Dates inconnues"}
-          </span>
         </div>
       </div>
       <div className="flex flex-col justify-center gap-2 px-3 border-l border-border">
