@@ -143,6 +143,17 @@ export default function FamilyCards({
       .filter(Boolean)
       .sort(sortByName);
 
+    const siblingIds = new Set();
+    for (const r of relationships) {
+      if (r.relationshipType !== "parent" || r.relatedPersonId !== focused.id) continue;
+      for (const s of relationships) {
+        if (s.relationshipType === "parent" && s.personId === r.personId && s.relatedPersonId !== focused.id) {
+          siblingIds.add(s.relatedPersonId);
+        }
+      }
+    }
+    const siblings = [...siblingIds].map((id) => byId.get(id)).filter(Boolean).sort(sortByName);
+
     const children = relationships
       .filter((r) => r.relationshipType === "parent" && r.personId === focused.id)
       .map((r) => byId.get(r.relatedPersonId))
@@ -169,7 +180,7 @@ export default function FamilyCards({
       groupMap.get(key).children.push(child);
     }
 
-    const hasFamily = parents.length > 0 || spouses.length > 0 || children.length > 0;
+    const hasFamily = parents.length > 0 || siblings.length > 0 || spouses.length > 0 || children.length > 0;
 
     return (
       <div>
@@ -197,6 +208,16 @@ export default function FamilyCards({
                 <p className="text-xs font-mono uppercase tracking-wider text-ink-muted mb-2">Ascendants</p>
                 <div className="grid gap-0.5">
                   {parents.map((p) => (
+                    <MemberRow key={p.id} person={p} selected={selectedId === p.id} onClick={onOpenFamily} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {siblings.length > 0 && (
+              <div className="px-4 py-3 border-b border-border">
+                <p className="text-xs font-mono uppercase tracking-wider text-ink-muted mb-2">Frères et sœurs</p>
+                <div className="grid gap-0.5">
+                  {siblings.map((p) => (
                     <MemberRow key={p.id} person={p} selected={selectedId === p.id} onClick={onOpenFamily} />
                   ))}
                 </div>

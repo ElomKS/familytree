@@ -176,6 +176,16 @@ export default function PersonForm({
           onLastName={(v) => setForm({ ...form, motherLastName: v })}
           onDeceased={(v) => setForm({ ...form, motherDeceased: v })}
         />
+        <ParentRow
+          label={form.gender === "femme" ? "Conjoint" : form.gender === "homme" ? "Conjointe" : "Conjoint(e)"}
+          firstName={form.spouseFirstName}
+          lastName={form.spouseLastName}
+          deceased={form.spouseDeceased}
+          error={errors.spouseName}
+          onFirstName={(v) => setForm({ ...form, spouseFirstName: v })}
+          onLastName={(v) => setForm({ ...form, spouseLastName: v })}
+          onDeceased={(v) => setForm({ ...form, spouseDeceased: v })}
+        />
         <p className="text-xs text-ink-subtle -mt-2">
           Les frères et sœurs sont déduits automatiquement : deux membres partageant les mêmes parents.
         </p>

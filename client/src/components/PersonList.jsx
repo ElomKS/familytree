@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import PersonCard from "./PersonCard";
 import PersonDetailPanel from "./PersonDetailPanel";
 
@@ -20,6 +20,7 @@ export default function PersonList({
   onAddRelationship,
   onRemoveRelationship,
   onViewFamily,
+  onShowForm,
 }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [query]);
@@ -31,15 +32,25 @@ export default function PersonList({
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4 bg-panel card-shadow border border-border rounded-md px-3 py-2">
-        <Search size={15} className="text-ink-muted" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher par nom"
-          className="w-full bg-transparent text-ink-light text-sm outline-none"
-        />
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 flex-1 bg-panel card-shadow border border-border rounded-md px-3 py-2">
+          <Search size={15} className="text-ink-muted" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher par nom"
+            className="w-full bg-transparent text-ink-light text-sm outline-none"
+          />
+        </div>
+        {onShowForm && (
+          <button
+            onClick={onShowForm}
+            className="shrink-0 flex items-center gap-1.5 text-sm px-3 py-2 rounded-md bg-panel card-shadow border border-border text-ink-muted hover:text-ink-light transition-colors"
+          >
+            <Plus size={14} /> Formulaire
+          </button>
+        )}
       </div>
 
       {!query.trim() ? (

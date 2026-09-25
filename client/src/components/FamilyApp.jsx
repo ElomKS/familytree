@@ -17,11 +17,12 @@ import PersonDetailPanel from "./PersonDetailPanel";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import AdminPanel from "./AdminPanel";
 import FamilyCards from "./FamilyCards";
+import FamilyTree from "./FamilyTree";
 import RelationshipPicker from "./RelationshipPicker";
 import { fullName, normalizeName } from "../utils/person";
 import { buildGedcom, downloadGedcom, parseGedcom } from "../utils/gedcom";
 
-const emptyForm = { firstName: "", lastName: "", gender: "", photoUrl: "", fatherFirstName: "", fatherLastName: "", fatherDeceased: false, motherFirstName: "", motherLastName: "", motherDeceased: false, notes: "" };
+const emptyForm = { firstName: "", lastName: "", gender: "", photoUrl: "", fatherFirstName: "", fatherLastName: "", fatherDeceased: false, motherFirstName: "", motherLastName: "", motherDeceased: false, spouseFirstName: "", spouseLastName: "", spouseDeceased: false, notes: "" };
 
 function findByName(people, name) {
   const normalized = normalizeName(name);
@@ -43,6 +44,8 @@ export default function FamilyApp() {
   const [view, setView] = useState("registre");
   const [pickerFor, setPickerFor] = useState(null);
   const [focusId, setFocusId] = useState(null);
+  const [formHidden, setFormHidden] = useState(false);
+  const [backState, setBackState] = useState(null);
   const fileInputRef = useRef(null);
 
   const authUser = getAuthUser();
@@ -73,6 +76,9 @@ export default function FamilyApp() {
     }
     if (selfName && normalizeName(`${values.motherFirstName} ${values.motherLastName}`) === selfName) {
       e.motherName = "Ne peut pas être la personne elle-même.";
+    }
+    if (selfName && normalizeName(`${values.spouseFirstName} ${values.spouseLastName}`) === selfName) {
+      e.spouseName = "Ne peut pas être la personne elle-même.";
     }
     return e;
   }
@@ -122,6 +128,8 @@ export default function FamilyApp() {
       };
       const dad = await resolveParent(form.fatherFirstName, form.fatherLastName, "homme", form.fatherDeceased);
       const mom = await resolveParent(form.motherFirstName, form.motherLastName, "femme", form.motherDeceased);
+      const spouseGender = form.gender === "femme" ? "homme" : form.gender === "homme" ? "femme" : "";
+      const spouse = await resolveParent(form.spouseFirstName, form.spouseLastName, spouseGender, form.spouseDeceased);
       const desired = [dad, mom].filter(Boolean);
 
       if (editingId) {
@@ -143,6 +151,32 @@ export default function FamilyApp() {
           ...prev.filter((r) => !toRemove.some((x) => x.id === r.id)),
           ...added,
         ]);
+        const currentSpouses = relationships.filter(
+          (r) => r.relationshipType === "spouse" && (r.personId === editingId || r.relatedPersonId === editingId)
+        );
+        const spouseIds = new Set(
+          currentSpouses.map((r) => (r.personId === editingId ? r.relatedPersonId : r.personId))
+        );
+        if (spouse) {
+          const toRemoveSpouse = currentSpouses.filter(
+            (r) => (r.personId === editingId ? r.relatedPersonId : r.personId) !== spouse.id
+          );
+          if (toRemoveSpouse.length) {
+            await Promise.all(toRemoveSpouse.map((r) => deleteRelationship(r.id)));
+            setRelationships((prev) => prev.filter((r) => !toRemoveSpouse.some((x) => x.id === r.id)));
+          }
+          if (!spouseIds.has(spouse.id)) {
+            const sp = await createRelationship({
+              personId: editingId,
+              relatedPersonId: spouse.id,
+              relationshipType: "spouse",
+            });
+            setRelationships((prev) => [...prev, sp]);
+          }
+        } else if (currentSpouses.length) {
+          await Promise.all(currentSpouses.map((r) => deleteRelationship(r.id)));
+          setRelationships((prev) => prev.filter((r) => !currentSpouses.some((x) => x.id === r.id)));
+        }
         setStatus({ type: "success", text: "Membre mis à jour." });
       } else {
         const created = await createPerson(body);
@@ -153,6 +187,14 @@ export default function FamilyApp() {
           )
         );
         if (rels.length) setRelationships((prev) => [...prev, ...rels]);
+        if (spouse) {
+          const sp = await createRelationship({
+            personId: created.id,
+            relatedPersonId: spouse.id,
+            relationshipType: "spouse",
+          });
+          setRelationships((prev) => [...prev, sp]);
+        }
         setStatus({ type: "success", text: "Membre ajouté." });
       }
       resetForm();
@@ -165,12 +207,16 @@ export default function FamilyApp() {
 
   function startEdit(person) {
     setView("registre");
+    setFormHidden(false);
     let fatherFirstName = "";
     let fatherLastName = "";
     let motherFirstName = "";
     let motherLastName = "";
     let fatherDeceased = false;
     let motherDeceased = false;
+    let spouseFirstName = "";
+    let spouseLastName = "";
+    let spouseDeceased = false;
     for (const r of relationships) {
       if (r.relationshipType !== "parent" || r.relatedPersonId !== person.id) continue;
       const parent = people.find((p) => p.id === r.personId);
@@ -193,6 +239,17 @@ export default function FamilyApp() {
         motherDeceased = !!parent.deceased;
       }
     }
+    for (const r of relationships) {
+      if (r.relationshipType !== "spouse" || (r.personId !== person.id && r.relatedPersonId !== person.id)) continue;
+      const otherId = r.personId === person.id ? r.relatedPersonId : r.personId;
+      const spouse = people.find((p) => p.id === otherId);
+      if (spouse) {
+        spouseFirstName = spouse.firstName;
+        spouseLastName = spouse.lastName || "";
+        spouseDeceased = !!spouse.deceased;
+        break;
+      }
+    }
     setEditingId(person.id);
     setForm({
       firstName: person.firstName,
@@ -205,6 +262,9 @@ export default function FamilyApp() {
       motherFirstName,
       motherLastName,
       motherDeceased,
+      spouseFirstName,
+      spouseLastName,
+      spouseDeceased,
       notes: person.notes || "",
     });
     setErrors({});
@@ -276,9 +336,43 @@ export default function FamilyApp() {
   }
 
   function viewFamily(id) {
-    setSelectedPerson(people.find((p) => p.id === id) || null);
+    if (view === "arbre" && focusId === id) return;
+    setBackState({ view, focusId });
+    setFocusId(id);
+    setSelectedPerson(null);
+    setView("arbre");
+  }
+
+  function openFamily(id) {
+    if (view === "arbre" && focusId === id) {
+      const parents = relationships
+        .filter((r) => r.relationshipType === "parent" && r.relatedPersonId === id)
+        .map((r) => people.find((p) => p.id === r.personId))
+        .filter(Boolean);
+      const up = parents.find((p) => p.gender === "homme") || parents[0];
+      if (up) {
+        setFocusId(up.id);
+        setSelectedPerson(up);
+        setView("arbre");
+        return;
+      }
+      const prev = backState;
+      setBackState(null);
+      if (prev && prev.view === "arbre") {
+        setFocusId(prev.focusId);
+        setSelectedPerson(people.find((p) => p.id === prev.focusId) || null);
+        setView("arbre");
+      } else {
+        setFocusId(null);
+        setView("registre");
+        setSelectedPerson(null);
+      }
+      return;
+    }
+    setBackState({ view, focusId });
     setFocusId(id);
     setView("arbre");
+    setSelectedPerson(people.find((p) => p.id === id) || null);
   }
 
   function handleExportGedcom() {
@@ -349,7 +443,7 @@ export default function FamilyApp() {
 
         <div className="flex gap-1 mb-8 bg-panel card-shadow border border-border rounded-md p-1 w-fit">
           <button
-            onClick={() => setView("registre")}
+            onClick={() => { setBackState(null); setView("registre"); }}
             className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md transition-colors ${
               view === "registre" ? "bg-accent text-panel font-medium" : "text-ink-muted hover:text-ink-light"
             }`}
@@ -357,7 +451,7 @@ export default function FamilyApp() {
             <List size={14} /> Registre
           </button>
           <button
-            onClick={() => { setView("arbre"); setFocusId(null); }}
+            onClick={() => { setBackState(null); setView("arbre"); setFocusId(null); }}
             className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md transition-colors ${
               view === "arbre" ? "bg-accent text-panel font-medium" : "text-ink-muted hover:text-ink-light"
             }`}
@@ -367,17 +461,19 @@ export default function FamilyApp() {
         </div>
 
         {view === "registre" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8">
-            <PersonForm
-              editingId={editingId}
-              form={form}
-              setForm={setForm}
-              errors={errors}
-              status={status}
-              saving={saving}
-              onSubmit={handleSubmit}
-              onCancelEdit={resetForm}
-            />
+          <div className={formHidden ? "grid grid-cols-1" : "grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8"}>
+            {!formHidden && (
+              <PersonForm
+                editingId={editingId}
+                form={form}
+                setForm={setForm}
+                errors={errors}
+                status={status}
+                saving={saving}
+                onSubmit={handleSubmit}
+                onCancelEdit={resetForm}
+              />
+            )}
             <PersonList
               people={filtered}
               allPeople={people}
@@ -385,7 +481,11 @@ export default function FamilyApp() {
               setQuery={setQuery}
               selectedPerson={selectedPerson}
               relationships={relationships}
-              onSelect={setSelectedPerson}
+              onSelect={(person) => {
+                setSelectedPerson(person);
+                setFormHidden(true);
+              }}
+              onShowForm={formHidden ? () => setFormHidden(false) : null}
               onCloseDetail={() => setSelectedPerson(null)}
               onEdit={startEdit}
               onDelete={isAdmin ? setPendingDelete : null}
@@ -424,17 +524,24 @@ export default function FamilyApp() {
                 )}
               </div>
             )}
+            {focusId && (
+              <div className="mb-6">
+                <FamilyTree
+                  people={people}
+                  relationships={relationships}
+                  rootId={focusId}
+                  onOpenFamily={openFamily}
+                />
+              </div>
+            )}
             <FamilyCards
               people={people}
               relationships={relationships}
               selectedId={selectedPerson?.id}
               onSelect={selectPerson}
               focusId={focusId}
-              onOpenFamily={(id) => {
-                setFocusId(id);
-                selectPerson(id);
-              }}
-              onBack={() => setFocusId(null)}
+              onOpenFamily={openFamily}
+              onBack={() => { setBackState(null); setFocusId(null); }}
             />
             <PersonDetailPanel
               person={selectedPerson}
