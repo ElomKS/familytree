@@ -4,36 +4,24 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        surface: {
-          DEFAULT: "#f5ebe0",
-          dark: "#e8ddd3",
-          deep: "#d5c9bb",
-        },
-        panel: {
-          DEFAULT: "#1D2330",
-          input: "#14181F",
-        },
-        border: {
-          DEFAULT: "#313A4E",
-          hover: "#454F68",
-        },
-        ink: {
-          DEFAULT: "#111827",
-          muted: "#9098AD",
-          subtle: "#5A6278",
-          request: "#8B98B8",
-          light: "#EDEAE2",
-        },
-        accent: {
-          DEFAULT: "#C79A56",
-          hover: "#D9AC68",
-        },
-        danger: {
-          DEFAULT: "#C1584C",
-          hover: "#D2685C",
-          text: "#1D0F0D",
-        },
-        success: "#6B9A78",
+        surface: "rgb(var(--c-surface) / <alpha-value>)",
+        "surface-dark": "rgb(var(--c-surface-dark) / <alpha-value>)",
+        "surface-deep": "rgb(var(--c-surface-deep) / <alpha-value>)",
+        panel: "rgb(var(--c-panel) / <alpha-value>)",
+        "panel-input": "rgb(var(--c-panel-input) / <alpha-value>)",
+        border: "rgb(var(--c-border) / <alpha-value>)",
+        "border-hover": "rgb(var(--c-border-hover) / <alpha-value>)",
+        ink: "rgb(var(--c-ink) / <alpha-value>)",
+        "ink-muted": "rgb(var(--c-ink-muted) / <alpha-value>)",
+        "ink-subtle": "rgb(var(--c-ink-subtle) / <alpha-value>)",
+        "ink-request": "rgb(var(--c-ink-request) / <alpha-value>)",
+        "ink-light": "rgb(var(--c-ink-light) / <alpha-value>)",
+        accent: "rgb(var(--c-accent) / <alpha-value>)",
+        "accent-hover": "rgb(var(--c-accent-hover) / <alpha-value>)",
+        danger: "rgb(var(--c-danger) / <alpha-value>)",
+        "danger-hover": "rgb(var(--c-danger-hover) / <alpha-value>)",
+        "danger-text": "rgb(var(--c-danger-text) / <alpha-value>)",
+        success: "rgb(var(--c-success) / <alpha-value>)",
       },
       keyframes: {
         "fade-in": {

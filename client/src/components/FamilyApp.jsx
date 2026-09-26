@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { List, Users, Download, Upload } from "lucide-react";
+import { List, Trash2, Users, Download, Upload } from "lucide-react";
 import { getAuthUser, logout } from "../api/userService";
 import {
   fetchPeople,
@@ -19,6 +19,7 @@ import AdminPanel from "./AdminPanel";
 import FamilyCards from "./FamilyCards";
 import FamilyTree from "./FamilyTree";
 import RelationshipPicker from "./RelationshipPicker";
+import Toast from "./Toast";
 import { fullName, normalizeName } from "../utils/person";
 import { buildGedcom, downloadGedcom, parseGedcom } from "../utils/gedcom";
 
@@ -46,10 +47,18 @@ export default function FamilyApp() {
   const [focusId, setFocusId] = useState(null);
   const [formHidden, setFormHidden] = useState(false);
   const [backState, setBackState] = useState(null);
+  const [pendingTestCleanup, setPendingTestCleanup] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [light, setLight] = useState(() => (localStorage.getItem("family-theme") || "dark") === "light");
   const fileInputRef = useRef(null);
 
   const authUser = getAuthUser();
   const isAdmin = authUser?.role === "admin";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", light);
+    localStorage.setItem("family-theme", light ? "light" : "dark");
+  }, [light]);
 
   useEffect(() => {
     Promise.all([fetchPeople(), fetchRelationships()])
@@ -57,8 +66,15 @@ export default function FamilyApp() {
         setPeople(p);
         setRelationships(r);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!status) return;
+    const t = setTimeout(() => setStatus(null), 4000);
+    return () => clearTimeout(t);
+  }, [status]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,10 +82,37 @@ export default function FamilyApp() {
     return people.filter((p) => fullName(p).toLowerCase().includes(q));
   }, [people, query]);
 
+  const testPeople = useMemo(
+    () => people.filter((p) => (p.notes || "").startsWith("[TEST]")),
+    [people]
+  );
+
+  const stats = useMemo(() => {
+    const deceased = people.filter((p) => p.deceased).length;
+    const families = new Map();
+    for (const p of people) {
+      const key = (p.lastName || "").trim();
+      if (key) families.set(key, (families.get(key) || 0) + 1);
+    }
+    const top = [...families.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3);
+    const byDay = new Map();
+    for (const p of people) {
+      const day = (p.createdAt || "").slice(0, 10);
+      if (day) byDay.set(day, (byDay.get(day) || 0) + 1);
+    }
+    const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-7);
+    const parentLinks = relationships.filter((r) => r.relationshipType === "parent").length;
+    const familyCount = people.length
+      ? new Set(people.map((p) => (p.lastName || "").trim()).filter(Boolean)).size
+      : 0;
+    return { deceased, top, days, parentLinks, familyCount };
+  }, [people, relationships]);
+
   function validate(values) {
     const e = {};
     if (!values.firstName.trim()) e.firstName = "Le prénom est requis.";
     if (!values.lastName.trim()) e.lastName = "Le nom est requis.";
+    if (!values.gender) e.gender = "Le genre est requis.";
     const selfName = normalizeName(`${values.firstName} ${values.lastName}`);
     if (selfName && normalizeName(`${values.fatherFirstName} ${values.fatherLastName}`) === selfName) {
       e.fatherName = "Ne peut pas être la personne elle-même.";
@@ -327,6 +370,23 @@ export default function FamilyApp() {
     }
   }
 
+  async function handleCleanupTest() {
+    const ids = testPeople.map((p) => p.id);
+    setPendingTestCleanup(false);
+    try {
+      for (const id of ids) await deletePerson(id);
+      setPeople((prev) => prev.filter((p) => !ids.includes(p.id)));
+      setRelationships((prev) =>
+        prev.filter((r) => !ids.includes(r.personId) && !ids.includes(r.relatedPersonId))
+      );
+      if (ids.includes(focusId)) setFocusId(null);
+      if (editingId && ids.includes(editingId)) resetForm();
+      setStatus({ type: "success", text: `${ids.length} membre(s) de test supprimé(s).` });
+    } catch {
+      setStatus({ type: "error", text: "Nettoyage impossible. Réessayez." });
+    }
+  }
+
   function handleLogout() {
     logout().finally(() => window.location.reload());
   }
@@ -430,6 +490,26 @@ export default function FamilyApp() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-surface via-surface-dark to-surface-deep text-ink font-sans">
+        <div className="max-w-6xl mx-auto px-6 py-10">
+          <div className="animate-pulse">
+            <div className="h-12 w-72 bg-panel rounded-lg mb-8" />
+            <div className="flex gap-4 mb-8">
+              <div className="h-9 w-24 bg-panel rounded-md" />
+              <div className="h-9 w-24 bg-panel rounded-md" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8">
+              <div className="h-[520px] bg-panel rounded-lg" />
+              <div className="h-[520px] bg-panel rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-surface via-surface-dark to-surface-deep text-ink font-sans">
       <div className="max-w-6xl mx-auto px-6 py-10">
@@ -439,6 +519,8 @@ export default function FamilyApp() {
           username={authUser?.username}
           onLogout={handleLogout}
           onOpenAdmin={() => setAdminOpen(true)}
+          light={light}
+          onToggleTheme={() => setLight((v) => !v)}
         />
 
         <div className="flex gap-1 mb-8 bg-panel card-shadow border border-border rounded-md p-1 w-fit">
@@ -461,14 +543,72 @@ export default function FamilyApp() {
         </div>
 
         {view === "registre" ? (
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              {[
+                { label: "Membres", value: people.length },
+                { label: "Familles (noms)", value: stats.familyCount },
+                { label: "Liens de parenté", value: stats.parentLinks },
+                { label: "Défunts", value: stats.deceased },
+              ].map((s) => (
+                <div key={s.label} className="bg-panel card-shadow border border-border rounded-lg px-4 py-3">
+                  <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">{s.label}</p>
+                  <p className="font-display text-2xl mt-1 text-ink-light">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+              <div className="bg-panel card-shadow border border-border rounded-lg px-4 py-4">
+                <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted mb-3">Plus grandes familles</p>
+                {stats.top.length === 0 ? (
+                  <p className="text-sm text-ink-subtle">Aucune donnée.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {stats.top.map(([name, count]) => {
+                      const max = stats.top[0][1];
+                      return (
+                        <div key={name}>
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-ink-muted">Famille {name}</span>
+                            <span className="text-ink-muted tabular-nums">{count}</span>
+                          </div>
+                          <div className="h-1.5 bg-ink/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-accent rounded-full" style={{ width: `${(count / max) * 100}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="bg-panel card-shadow border border-border rounded-lg px-4 py-4">
+                <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted mb-3">Ajouts par jour</p>
+                {stats.days.length === 0 ? (
+                  <p className="text-sm text-ink-subtle">Aucune donnée.</p>
+                ) : (
+                  <div className="flex items-end gap-2 h-28">
+                    {stats.days.map(([day, count]) => {
+                      const max = Math.max(...stats.days.map((d) => d[1]));
+                      return (
+                        <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[10px] text-ink-muted tabular-nums">{count}</span>
+                          <div className="w-full bg-accent rounded-t" style={{ height: `${(count / max) * 70}px` }} />
+                          <span className="text-[10px] text-ink-subtle truncate">{day.slice(5)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           <div className={formHidden ? "grid grid-cols-1" : "grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8"}>
             {!formHidden && (
               <PersonForm
                 editingId={editingId}
+                people={people}
                 form={form}
                 setForm={setForm}
                 errors={errors}
-                status={status}
                 saving={saving}
                 onSubmit={handleSubmit}
                 onCancelEdit={resetForm}
@@ -495,6 +635,7 @@ export default function FamilyApp() {
               onViewFamily={viewFamily}
             />
           </div>
+          </div>
         ) : (
           <div>
             {!focusId && (
@@ -520,6 +661,14 @@ export default function FamilyApp() {
                       className="hidden"
                       onChange={handleImportFile}
                     />
+                    {testPeople.length > 0 && (
+                      <button
+                        onClick={() => setPendingTestCleanup(true)}
+                        className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-md bg-panel card-shadow border border-border text-danger hover:text-danger-hover transition-colors"
+                      >
+                        <Trash2 size={14} /> Nettoyer les données de test ({testPeople.length})
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -563,6 +712,16 @@ export default function FamilyApp() {
         <DeleteConfirmModal onConfirm={confirmDelete} onCancel={() => setPendingDelete(null)} />
       )}
 
+      {pendingTestCleanup && testPeople.length > 0 && (
+        <DeleteConfirmModal
+          title="Supprimer toutes les données de test ?"
+          message={`Ceci supprime définitivement les ${testPeople.length} membres fictifs (marqués [TEST]) ainsi que tous leurs liens. Vos membres réels sont conservés.`}
+          confirmLabel="Tout supprimer"
+          onConfirm={handleCleanupTest}
+          onCancel={() => setPendingTestCleanup(false)}
+        />
+      )}
+
       {pickerFor && (
         <RelationshipPicker
           person={pickerFor}
@@ -573,6 +732,7 @@ export default function FamilyApp() {
       )}
 
       <AdminPanel isOpen={adminOpen} onClose={() => setAdminOpen(false)} />
+      <Toast status={status} onDismiss={() => setStatus(null)} />
     </div>
   );
 }

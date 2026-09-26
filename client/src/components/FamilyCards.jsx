@@ -11,7 +11,7 @@ function MemberRow({ person, selected, onClick }) {
     <button
       onClick={() => onClick(person.id)}
       className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
-        selected ? "bg-accent/15" : "hover:bg-white/5"
+        selected ? "bg-accent/15" : "hover:bg-ink/10"
       }`}
     >
       <Avatar person={person} />
@@ -35,7 +35,7 @@ function ParentChip({ person, selected, onClick }) {
     <button
       onClick={() => onClick(person.id)}
       className={`flex items-center gap-2.5 rounded-md px-2 py-1 -mx-1 transition-colors ${
-        selected ? "bg-accent/15" : "hover:bg-white/5"
+        selected ? "bg-accent/15" : "hover:bg-ink/10"
       }`}
     >
       <Avatar person={person} />

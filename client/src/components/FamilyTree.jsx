@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, Maximize2, Minimize2, Minus, Plus, Scan } from "lucide-react";
 import { fullName } from "../utils/person";
 import { buildFamilyGraph, relationshipTo } from "../utils/relationship";
 import Avatar from "./Avatar";
@@ -20,7 +21,57 @@ const MOTHER_COLORS = [
   { border: "#F560B7", tint: "rgba(245,96,183,0.16)" },
 ];
 
+function networkOf(id, relationships) {
+  const s = new Set([id]);
+  for (const r of relationships) {
+    if (r.relationshipType === "parent") {
+      if (r.personId === id) s.add(r.relatedPersonId);
+      if (r.relatedPersonId === id) s.add(r.personId);
+    } else if (r.relationshipType === "spouse") {
+      if (r.personId === id) s.add(r.relatedPersonId);
+      if (r.relatedPersonId === id) s.add(r.personId);
+    }
+  }
+  for (const r of relationships) {
+    if (r.relationshipType === "parent" && r.personId === id) {
+      for (const r2 of relationships) {
+        if (r2.relationshipType === "parent" && r2.relatedPersonId === r.relatedPersonId && r2.personId !== id) {
+          s.add(r2.personId);
+        }
+      }
+    }
+  }
+  return s;
+}
+
 export default function FamilyTree({ people, relationships, rootId, onOpenFamily }) {
+  const [zoom, setZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hoverId, setHoverId] = useState(null);
+  const cardRef = useRef(null);
+  const viewportRef = useRef(null);
+
+  useEffect(() => {
+    const h = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", h);
+    return () => document.removeEventListener("fullscreenchange", h);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else cardRef.current?.requestFullscreen?.();
+  }
+
+  function fitToView() {
+    const el = viewportRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w > 0) setZoom(Math.min(1.5, Math.max(0.3, (w - 16) / tree.width)));
+  }
+
+  const zoomIn = () => setZoom((z) => Math.min(2, +(z + 0.25).toFixed(2)));
+  const zoomOut = () => setZoom((z) => Math.max(0.3, +(z - 0.25).toFixed(2)));
+
   const tree = useMemo(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
     const root = byId.get(rootId);
@@ -30,6 +81,16 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
     const parentsOf = graph.parentsOf;
     const childrenOf = graph.childrenOf;
     const spousesOf = graph.spousesOf;
+
+    const chain = [];
+    let cur = rootId;
+    while (cur && chain.length < 12) {
+      chain.push(cur);
+      const ps = (parentsOf.get(cur) || []).filter((p) => p !== cur);
+      if (!ps.length) break;
+      cur = ps.find((p) => (byId.get(p) || {}).gender === "homme") || ps[0];
+    }
+    const pathIds = chain.length > 1 ? chain.reverse() : [];
 
     const nodes = new Map();
     const getNode = (id, level) => {
@@ -251,25 +312,118 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
     const width = maxX - minX + NODE_W + PAD * 2;
     const height = (maxLevel - minLevel + 1) * NODE_H + (maxLevel - minLevel) * GAP_Y + PAD * 2;
 
-    return { nodes, edges, width, height, rootId };
+    const motherLegend = [...motherStyleMap.entries()].map(([mid, style]) => ({
+      id: mid,
+      name: fullName(byId.get(mid)),
+      border: style.border,
+    }));
+
+    return { nodes, edges, width, height, rootId, pathIds, motherLegend };
   }, [people, relationships, rootId]);
 
   if (!tree) return null;
   const root = people.find((p) => p.id === rootId);
+  const hover = hoverId ? networkOf(hoverId, relationships) : null;
+  const singleCard = tree.nodes.size === 1;
 
   return (
-    <div className="bg-panel card-shadow border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
-        <h2 className="font-display text-lg text-ink-light truncate">Arbre de {fullName(root)}</h2>
-        <span className="text-xs text-ink-muted ml-auto shrink-0">3 générations · navigatez en cliquant</span>
+    <div ref={cardRef} className="bg-panel card-shadow border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2.5">
+          <h2 className="font-display text-lg text-ink-light truncate">Arbre de {fullName(root)}</h2>
+          {!singleCard && (
+          <div className="flex items-center gap-0.5 ml-auto shrink-0">
+            <button
+              onClick={zoomOut}
+              aria-label="Zoom arrière"
+              title="Zoom arrière"
+              className="p-1.5 rounded-md text-ink-muted hover:text-ink-light hover:bg-ink/10 transition-colors"
+            >
+              <Minus size={15} />
+            </button>
+            <span className="text-xs text-ink-muted tabular-nums w-11 text-center">{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={zoomIn}
+              aria-label="Zoom avant"
+              title="Zoom avant"
+              className="p-1.5 rounded-md text-ink-muted hover:text-ink-light hover:bg-ink/10 transition-colors"
+            >
+              <Plus size={15} />
+            </button>
+            <button
+              onClick={fitToView}
+              aria-label="Ajuster à l'écran"
+              title="Ajuster à l'écran"
+              className="p-1.5 rounded-md text-ink-muted hover:text-ink-light hover:bg-ink/10 transition-colors"
+            >
+              <Scan size={15} />
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              aria-label="Plein écran"
+              title="Plein écran"
+              className="p-1.5 rounded-md text-ink-muted hover:text-ink-light hover:bg-ink/10 transition-colors"
+            >
+              {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+          </div>
+          )}
+        </div>
+        <div className="flex items-baseline gap-2 mt-1.5">
+          {tree.pathIds.length > 0 && (
+            <nav className="flex flex-wrap items-center gap-x-1.5 text-xs" aria-label="Chemin de la famille">
+              {tree.pathIds.map((id, i) => {
+                const person = people.find((p) => p.id === id);
+                const isCurrent = id === rootId;
+                return (
+                  <Fragment key={id}>
+                    {i > 0 && <span className="text-ink-subtle select-none">›</span>}
+                    {isCurrent ? (
+                      <span className="font-medium text-accent">{fullName(person)}</span>
+                    ) : (
+                      <button
+                        onClick={() => onOpenFamily(id)}
+                        className="text-ink-muted hover:text-accent transition-colors"
+                      >
+                        {fullName(person)}
+                      </button>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </nav>
+          )}
+          <span className="text-xs text-ink-subtle ml-auto shrink-0">Cliquez : explorer · Re-cliquez : remonter</span>
+        </div>
       </div>
-      <div className="overflow-auto">
-        <div className="relative" style={{ width: tree.width, height: tree.height, minWidth: "100%" }}>
+      {singleCard ? (
+        <div className="border-t border-border">
+          <div className="mx-4 my-5 border border-dashed border-border rounded-lg py-14 text-center">
+            <p className="font-display text-lg text-ink-muted">Aucun lien enregistré pour {fullName(root)}</p>
+            <p className="text-sm text-ink-subtle mt-1">
+              Ajoutez un conjoint, des enfants ou des parents via le formulaire pour construire cet arbre.
+            </p>
+          </div>
+        </div>
+      ) : (
+      <div
+        className="overflow-auto"
+        ref={viewportRef}
+        onDoubleClick={(e) => {
+          if (e.target === e.currentTarget) setZoom(1);
+        }}
+      >
+        <div style={{ width: tree.width * zoom, height: tree.height * zoom, minWidth: "100%", position: "relative" }}>
+          <div
+            className="absolute top-0 left-0"
+            style={{ width: tree.width, height: tree.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}
+          >
           <svg className="absolute inset-0" width={tree.width} height={tree.height} aria-hidden="true">
             {tree.edges.map((e, i) => {
               const a = tree.nodes.get(e.a);
               const b = tree.nodes.get(e.b);
               if (!a || !b) return null;
+              const dimEdge = hover && (!hover.has(e.a) || !hover.has(e.b));
               if (e.kind === "parent") {
                 const ax = a.px + NODE_W / 2;
                 const ay = a.py + NODE_H;
@@ -283,6 +437,7 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
                     fill="none"
                     stroke="#454F68"
                     strokeWidth={1.5}
+                    opacity={dimEdge ? 0.12 : 1}
                   />
                 );
               }
@@ -296,6 +451,7 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
                   fill="none"
                   stroke="#C79A56"
                   strokeWidth={1.5}
+                  opacity={dimEdge ? 0.12 : 1}
                 />
               );
             })}
@@ -304,10 +460,13 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
             const name = fullName(n.person);
             const deceased = !!n.person.deceased;
             const isRoot = n.id === tree.rootId;
+            const dimCard = hover && !hover.has(n.id);
             return (
               <button
                 key={n.id}
                 onClick={() => onOpenFamily(n.id)}
+                onMouseEnter={() => setHoverId(n.id)}
+                onMouseLeave={() => setHoverId(null)}
                 style={{
                   left: n.px,
                   top: n.py,
@@ -317,7 +476,9 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
                     ? { backgroundColor: n.motherStyle.tint, borderColor: n.motherStyle.border }
                     : {}),
                 }}
-                className={`absolute flex items-center gap-2.5 rounded-lg px-2.5 bg-panel-input text-left transition-colors ${
+                className={`absolute flex items-center gap-2.5 rounded-lg px-2.5 bg-panel-input text-left transition-[opacity,background-color,border-color] ${
+                  dimCard ? "opacity-30" : "opacity-100"
+                } ${
                   isRoot
                     ? "border-2 border-accent ring-1 ring-accent/50"
                     : n.motherStyle
@@ -341,11 +502,32 @@ export default function FamilyTree({ people, relationships, rootId, onOpenFamily
                   />
                 )}
                 {deceased && <span className="text-xs text-ink-subtle shrink-0">†</span>}
+                {isRoot && tree.pathIds.length > 0 && (
+                  <span
+                    title="Re-cliquez pour remonter"
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-accent text-panel-input flex items-center justify-center"
+                  >
+                    <ArrowUp size={12} strokeWidth={2.5} />
+                  </span>
+                )}
               </button>
             );
           })}
+          </div>
         </div>
       </div>
+      )}
+      {tree.motherLegend.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-2.5 border-t border-border text-[11px] text-ink-muted">
+          <span className="font-mono uppercase tracking-wider text-ink-subtle">Légende</span>
+          {tree.motherLegend.map((m) => (
+            <span key={m.id} className="flex items-center gap-1.5">
+              <span className="rounded-full shrink-0" style={{ width: 8, height: 8, backgroundColor: m.border }} />
+              {m.name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,14 +4,57 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --c-surface: 245 235 224;
+  --c-surface-dark: 232 221 211;
+  --c-surface-deep: 213 201 187;
+  --c-panel: 29 35 48;
+  --c-panel-input: 20 24 31;
+  --c-border: 49 58 78;
+  --c-border-hover: 69 79 104;
+  --c-ink: 17 24 39;
+  --c-ink-muted: 144 152 173;
+  --c-ink-subtle: 90 98 120;
+  --c-ink-request: 139 152 184;
+  --c-ink-light: 237 234 226;
+  --c-accent: 199 154 86;
+  --c-accent-hover: 217 172 104;
+  --c-danger: 193 88 76;
+  --c-danger-hover: 210 104 92;
+  --c-danger-text: 29 15 13;
+  --c-success: 107 154 120;
+}
+
+html.light {
+  --c-surface: 247 244 236;
+  --c-surface-dark: 241 237 225;
+  --c-surface-deep: 232 226 210;
+  --c-panel: 255 253 247;
+  --c-panel-input: 255 255 255;
+  --c-border: 228 222 207;
+  --c-border-hover: 184 175 153;
+  --c-ink: 38 34 27;
+  --c-ink-muted: 107 98 82;
+  --c-ink-subtle: 156 147 128;
+  --c-ink-request: 124 115 94;
+  --c-ink-light: 58 52 42;
+  --c-accent: 199 154 86;
+  --c-accent-hover: 184 137 63;
+  --c-danger: 193 88 76;
+  --c-danger-hover: 169 68 56;
+  --c-danger-text: 20 11 10;
+  --c-success: 78 138 92;
+}
+
 body {
   margin: 0;
-  background-color: #e8ddd3;
+  background-color: rgb(var(--c-surface-dark));
   font-family:
     'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
     "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease;
 }
 
 code {
@@ -25,13 +68,13 @@ code {
 
 .stub-line {
   background-image: repeating-linear-gradient(
-    to bottom, #313A4E 0, #313A4E 6px, transparent 6px, transparent 12px
+    to bottom, rgb(var(--c-border)) 0, rgb(var(--c-border)) 6px, transparent 6px, transparent 12px
   );
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #5A6278;
+  color: rgb(var(--c-ink-subtle));
 }
 
 @layer utilities {

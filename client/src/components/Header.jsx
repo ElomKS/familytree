@@ -1,7 +1,7 @@
-import { LogOut, Users } from "lucide-react";
+import { LogOut, Moon, Sun, Users } from "lucide-react";
 import { todayStamp } from "../api/userService";
 
-export default function Header({ personCount, role, username, onLogout, onOpenAdmin }) {
+export default function Header({ personCount, role, username, onLogout, onOpenAdmin, light, onToggleTheme }) {
   return (
     <header className="mb-8">
       <div className="h-1 w-24 bg-accent rounded-full mb-6" />
@@ -22,6 +22,9 @@ export default function Header({ personCount, role, username, onLogout, onOpenAd
                 <Users size={13} />
               </button>
             )}
+            <button onClick={onToggleTheme} className="text-ink-muted hover:text-accent transition-colors" aria-label="Basculer le thème" title="Thème clair / sombre">
+              {light ? <Moon size={13} /> : <Sun size={13} />}
+            </button>
             <button onClick={onLogout} className="text-ink-muted hover:text-danger transition-colors" aria-label="Déconnexion">
               <LogOut size={13} />
             </button>
